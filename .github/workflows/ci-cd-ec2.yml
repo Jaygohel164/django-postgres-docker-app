@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
 
-# Prevent overlapping deployments
+# Prevent multiple deployments at the same time
 concurrency:
   group: ec2-deploy
   cancel-in-progress: true
@@ -80,14 +80,33 @@ jobs:
           script: |
             set -e
 
-            cd ${{ secrets.REMOTE_APP_DIR }} || exit 1
+            APP_BASE="/home/ubuntu/apps"
+            APP_NAME="django-postgres-docker-app"
+            APP_DIR="$APP_BASE/$APP_NAME"
 
-            git pull origin main
+            echo "📁 Preparing application directory"
+            mkdir -p "$APP_BASE"
+            cd "$APP_BASE"
 
+            if [ ! -d "$APP_NAME/.git" ]; then
+              echo "📦 App not found. Cloning repository..."
+              git clone https://github.com/Jaygohel164/django-postgres-docker-app.git
+            else
+              echo "🔄 App found. Pulling latest changes..."
+              cd "$APP_NAME"
+              git pull origin main
+            fi
+
+            cd "$APP_DIR"
+
+            echo "🐳 Restarting containers"
             docker-compose down
             docker-compose up -d --build
 
+            echo "🛠 Running migrations"
             docker-compose exec -T web python src/manage.py migrate --noinput
+
+            echo "🎨 Collecting static files"
             docker-compose exec -T web python src/manage.py collectstatic --noinput
 
             echo "✅ Deployment completed successfully"
