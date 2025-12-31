@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -e
+
+if [ -d "/public_collected" ]; then
+    cp -r /public_collected /app
+fi
+
+exec "$@"
+
+

@@ -1,0 +1,28 @@
+
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: hello
+      POSTGRES_USER: hello
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: hello
+      POSTGRES_USER: hello
+      POSTGRES_PASSWORD: password
+      POSTGRES_PORT: 5432
+      SECRET_KEY: abc
+
+volumes:
+  postgres_data:

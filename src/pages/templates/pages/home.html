@@ -1,0 +1,19 @@
+{% extends "layouts/index.html" %}
+{% load static %}
+
+{% block title %}Docker + Django{% endblock %}
+
+{% block body %}
+  <section class="hero">
+    <div class="card">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:1rem">
+        <img class="logo" src="{% static 'images/django.png' %}" alt="Django logo" />
+        <h1 style="margin:0;font-size:1.6rem">Docker + Django</h1>
+        <p class="lead">A minimal example app to demonstrate Docker and Django working together.</p>
+
+        <div class="meta">🐳 Learn the Docker fundamentals at</div>
+        <a class="btn" href="https://diveintodocker.com?ref=docker-django-example">diveintodocker.com</a>
+      </div>
+    </div>
+  </section>
+{% endblock %}
