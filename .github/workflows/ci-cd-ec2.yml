@@ -18,21 +18,11 @@ jobs:
           POSTGRES_PASSWORD: password
         ports:
           - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U hello"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
 
       redis:
         image: redis:7
         ports:
           - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping || exit 1"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
 
     env:
       POSTGRES_HOST: localhost
@@ -49,7 +39,7 @@ jobs:
       PYTHON_VERSION: "3.13"
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -63,39 +53,32 @@ jobs:
           pip install uv
           uv sync --no-dev
 
-      - name: Wait for Postgres and Redis
+      - name: Run database migrations
         env:
-          PGHOST: ${{ env.POSTGRES_HOST }}
-          PGPORT: ${{ env.POSTGRES_PORT }}
-          PGPASSWORD: ${{ env.POSTGRES_PASSWORD }}
-          REDIS_HOST: ${{ env.REDIS_HOST }}
-          REDIS_PORT: ${{ env.REDIS_PORT }}
-        run: |
-          echo "Waiting for Postgres at ${PGHOST}:${PGPORT}..."
-          for i in {1..60}; do
-            pg_isready -h "${PGHOST}" -p "${PGPORT}" -U hello && break || sleep 1
-          done
-          echo "Waiting for Redis at ${REDIS_HOST}:${REDIS_PORT}..."
-          python - <<'PY'
-import os, socket, time
-host = os.environ.get('REDIS_HOST', 'localhost')
-port = int(os.environ.get('REDIS_PORT', '6379'))
-for i in range(60):
-    try:
-        s = socket.create_connection((host, port), timeout=1)
-        s.close()
-        print('redis reachable')
-        break
-    except Exception:
-        time.sleep(1)
-else:
-    raise SystemExit(f'redis not reachable at {host}:{port}')
-PY
-
-      - name: Run migrations
+          PYTHON_VERSION: "3.13"
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: hello
+          POSTGRES_USER: hello
+          POSTGRES_PASSWORD: password
+          SECRET_KEY: ci-secret
+          DEBUG: "false"
         run: uv run python src/manage.py migrate --noinput
 
-      - name: Run tests
+      - name: Run Django tests
+        env:
+          PYTHON_VERSION: "3.13"
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: hello
+          POSTGRES_USER: hello
+          POSTGRES_PASSWORD: password
+          SECRET_KEY: ci-secret
+          DEBUG: "false"
         run: uv run python src/manage.py test
 
   deploy:
@@ -104,7 +87,7 @@ PY
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy via SSH
+      - name: Deploy application to EC2
         uses: appleboy/ssh-action@v1.6.1
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -112,8 +95,11 @@ PY
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd ${{ secrets.REMOTE_APP_DIR }}
+
             git pull origin main
+
             docker compose down
             docker compose up -d --build
+
             docker compose exec -T web python src/manage.py migrate --noinput
             docker compose exec -T web python src/manage.py collectstatic --noinput
