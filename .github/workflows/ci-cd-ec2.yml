@@ -43,6 +43,8 @@ jobs:
       DEBUG: "false"
       PYTHON_VERSION: "3.13"
       REDIS_URL: "redis://redis:6379/0"
+      REDIS_HOST: "localhost"
+      REDIS_PORT: 6379
 
     steps:
       - name: Checkout code

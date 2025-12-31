@@ -127,7 +127,13 @@ SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
 # -------------------------------
 # Redis
 # -------------------------------
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+# Prefer explicit host/port environment variables so code works both inside
+# Docker networks (where host=redis) and CI runners or local dev (where
+# host=localhost). Defaults use localhost which is appropriate for GitHub
+# Actions service containers.
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_URL = os.getenv("REDIS_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/0")
 
 # -------------------------------
 # STATIC FILES (FIXED)
