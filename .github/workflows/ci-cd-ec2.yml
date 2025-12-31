@@ -23,6 +23,7 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+
       redis:
         image: redis:7
         ports:
@@ -39,12 +40,13 @@ jobs:
       POSTGRES_DB: hello
       POSTGRES_USER: hello
       POSTGRES_PASSWORD: password
+
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+
       SECRET_KEY: ci-secret
       DEBUG: "false"
       PYTHON_VERSION: "3.13"
-      REDIS_URL: "redis://redis:6379/0"
-      REDIS_HOST: "localhost"
-      REDIS_PORT: 6379
 
     steps:
       - name: Checkout code
@@ -62,24 +64,32 @@ jobs:
           uv sync --no-dev
 
       - name: Wait for Postgres and Redis
+        env:
+          PGHOST: ${{ env.POSTGRES_HOST }}
+          PGPORT: ${{ env.POSTGRES_PORT }}
+          PGPASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          REDIS_HOST: ${{ env.REDIS_HOST }}
+          REDIS_PORT: ${{ env.REDIS_PORT }}
         run: |
-          echo "Waiting for Postgres..."
+          echo "Waiting for Postgres at ${PGHOST}:${PGPORT}..."
           for i in {1..60}; do
-            pg_isready -h localhost -p 5432 -U hello && break || sleep 1
+            pg_isready -h "${PGHOST}" -p "${PGPORT}" -U hello && break || sleep 1
           done
-          echo "Waiting for Redis..."
+          echo "Waiting for Redis at ${REDIS_HOST}:${REDIS_PORT}..."
           python - <<'PY'
-import socket, time
+import os, socket, time
+host = os.environ.get('REDIS_HOST', 'localhost')
+port = int(os.environ.get('REDIS_PORT', '6379'))
 for i in range(60):
     try:
-        s=socket.create_connection(("redis",6379),timeout=1)
+        s = socket.create_connection((host, port), timeout=1)
         s.close()
         print('redis reachable')
         break
     except Exception:
         time.sleep(1)
 else:
-    raise SystemExit('redis not reachable')
+    raise SystemExit(f'redis not reachable at {host}:{port}')
 PY
 
       - name: Run migrations
@@ -92,7 +102,6 @@ PY
     name: Deploy to EC2
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Deploy via SSH
@@ -103,13 +112,8 @@ PY
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd ${{ secrets.REMOTE_APP_DIR }}
-
             git pull origin main
-
             docker compose down
             docker compose up -d --build
-
             docker compose exec -T web python src/manage.py migrate --noinput
             docker compose exec -T web python src/manage.py collectstatic --noinput
-
-            echo "Deployment successful"
