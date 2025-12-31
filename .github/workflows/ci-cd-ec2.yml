@@ -1,0 +1,81 @@
+name: CI-CD to EC2
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run Django Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: hello
+          POSTGRES_USER: hello
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U hello"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: hello
+      POSTGRES_USER: hello
+      POSTGRES_PASSWORD: password
+      SECRET_KEY: ci-secret
+      DEBUG: "false"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv
+          uv sync --no-dev
+
+      - name: Run migrations
+        run: uv run python src/manage.py migrate --noinput
+
+      - name: Run tests
+        run: uv run python src/manage.py test
+
+  deploy:
+    name: Deploy to EC2
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.6.1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ${{ secrets.REMOTE_APP_DIR }}
+
+            git pull origin main
+
+            docker compose down
+            docker compose up -d --build
+
+            docker compose exec -T web python src/manage.py migrate --noinput
+            docker compose exec -T web python src/manage.py collectstatic --noinput
+
+            echo "Deployment successful"
