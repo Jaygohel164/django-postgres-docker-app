@@ -144,13 +144,14 @@ STATIC_URL = "/static/"
 # This is where files get collected during `collectstatic`
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Extra static folders (safe - only if folder exists)
-STATICFILES_DIRS = [
+# Extra static folders (only include directories that exist to avoid warnings)
+_static_dirs = [
     BASE_DIR / "public",
     # Also include the project's `assets/static` folder so built or example
     # static files bundled in the `assets` directory are collected.
     BASE_DIR.parent / "assets" / "static",
 ]
+STATICFILES_DIRS = [d for d in _static_dirs if d.exists()]
 
 # Whitenoise compressed cached storage
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
