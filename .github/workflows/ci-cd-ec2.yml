@@ -4,6 +4,14 @@ on:
   push:
     branches: [ main ]
 
+# Prevent overlapping deployments
+concurrency:
+  group: ec2-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Run Django Tests
@@ -30,10 +38,8 @@ jobs:
       POSTGRES_DB: hello
       POSTGRES_USER: hello
       POSTGRES_PASSWORD: password
-
       REDIS_HOST: localhost
       REDIS_PORT: 6379
-
       SECRET_KEY: ci-secret
       DEBUG: "false"
       PYTHON_VERSION: "3.13"
@@ -54,31 +60,9 @@ jobs:
           uv sync --no-dev
 
       - name: Run database migrations
-        env:
-          PYTHON_VERSION: "3.13"
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432
-          POSTGRES_DB: hello
-          POSTGRES_USER: hello
-          POSTGRES_PASSWORD: password
-          SECRET_KEY: ci-secret
-          DEBUG: "false"
         run: uv run python src/manage.py migrate --noinput
 
       - name: Run Django tests
-        env:
-          PYTHON_VERSION: "3.13"
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432
-          POSTGRES_DB: hello
-          POSTGRES_USER: hello
-          POSTGRES_PASSWORD: password
-          SECRET_KEY: ci-secret
-          DEBUG: "false"
         run: uv run python src/manage.py test
 
   deploy:
@@ -94,7 +78,9 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ${{ secrets.REMOTE_APP_DIR }}
+            set -e
+
+            cd ${{ secrets.REMOTE_APP_DIR }} || exit 1
 
             git pull origin main
 
@@ -103,3 +89,5 @@ jobs:
 
             docker-compose exec -T web python src/manage.py migrate --noinput
             docker-compose exec -T web python src/manage.py collectstatic --noinput
+
+            echo "✅ Deployment completed successfully"
