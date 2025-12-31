@@ -23,6 +23,15 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     env:
       POSTGRES_HOST: localhost
@@ -32,6 +41,8 @@ jobs:
       POSTGRES_PASSWORD: password
       SECRET_KEY: ci-secret
       DEBUG: "false"
+      PYTHON_VERSION: "3.13"
+      REDIS_URL: "redis://redis:6379/0"
 
     steps:
       - name: Checkout code
@@ -47,6 +58,27 @@ jobs:
           python -m pip install --upgrade pip
           pip install uv
           uv sync --no-dev
+
+      - name: Wait for Postgres and Redis
+        run: |
+          echo "Waiting for Postgres..."
+          for i in {1..60}; do
+            pg_isready -h localhost -p 5432 -U hello && break || sleep 1
+          done
+          echo "Waiting for Redis..."
+          python - <<'PY'
+import socket, time
+for i in range(60):
+    try:
+        s=socket.create_connection(("redis",6379),timeout=1)
+        s.close()
+        print('redis reachable')
+        break
+    except Exception:
+        time.sleep(1)
+else:
+    raise SystemExit('redis not reachable')
+PY
 
       - name: Run migrations
         run: uv run python src/manage.py migrate --noinput
