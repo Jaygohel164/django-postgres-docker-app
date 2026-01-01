@@ -3,12 +3,6 @@ name: CI-CD to EC2
 on:
   workflow_dispatch:
 
-
-# Prevent multiple deployments at the same time
-concurrency:
-  group: ec2-deploy
-  cancel-in-progress: true
-
 permissions:
   contents: read
 
@@ -16,6 +10,7 @@ jobs:
   test:
     name: Run Django Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -42,7 +37,6 @@ jobs:
       REDIS_PORT: 6379
       SECRET_KEY: ci-secret
       DEBUG: "false"
-      PYTHON_VERSION: "3.13"
 
     steps:
       - name: Checkout repository
@@ -59,11 +53,16 @@ jobs:
           pip install uv
           uv sync --no-dev
 
-  
+      # OPTIONAL – enable later when tests exist
+      # - name: Run Django tests
+      #   run: |
+      #     python manage.py test
+
   deploy:
     name: Deploy to EC2
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Deploy application to EC2
@@ -72,11 +71,14 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-       
-            echo "🐳 Restarting containers"
+          script: |
+            echo "🐳 Moving to app directory"
+            cd /path/to/your/app   # 🔴 CHANGE THIS
+
+            echo "🐳 Stopping old containers"
             docker-compose down
+
+            echo "🐳 Starting new containers"
             docker-compose up -d --build
 
-          
-    
             echo "✅ Deployment completed successfully"
