@@ -1,8 +1,8 @@
 name: CI-CD to EC2
 
 on:
-  push:
-    branches: [ main ]
+  workflow_dispatch:
+
 
 # Prevent multiple deployments at the same time
 concurrency:
